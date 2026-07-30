@@ -20,4 +20,6 @@ EXPOSE 8080
 
 USER 1000
 
-CMD ["gunicorn", "--bind", "0.0.0.0:8080", "app:app"]
+ENTRYPOINT ["/usr/bin/python3.11", "-m", "gunicorn.app.wsgiapp"]
+
+CMD ["--bind", "0.0.0.0:8080", "app:app"]
