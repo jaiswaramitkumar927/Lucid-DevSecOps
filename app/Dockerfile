@@ -20,4 +20,4 @@ EXPOSE 8080
 
 USER 1000
 
-CMD ["app.py"]
+CMD ["gunicorn", "--bind", "0.0.0.0:8080", "app:app"]
