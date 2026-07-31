@@ -92,6 +92,7 @@ var.private_subnets[count.index]
 availability_zone =
 var.azs[count.index]
 
+map_public_ip_on_launch = false
 
 tags={
 

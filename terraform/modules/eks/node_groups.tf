@@ -54,4 +54,12 @@ capacity_type =
 each.value.capacity_type
 
 
+# Security Group
+
+    vpc_security_group_ids = [
+
+    var.node_security_group_id
+
+    ]
+
 }

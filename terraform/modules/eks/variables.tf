@@ -41,11 +41,21 @@ max_size=number
 
 instance_types=list(string)
 
-
 capacity_type=string
-
 
 }))
 
+}
+
+variable "cluster_security_group_id" {
+
+type = string
+
+}
+
+
+variable "node_security_group_id" {
+
+type = string
 
 }

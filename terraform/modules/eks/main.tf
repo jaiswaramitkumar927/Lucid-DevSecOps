@@ -32,6 +32,13 @@ var.subnet_ids
 
 enable_cluster_creator_admin_permissions=true
 
+# Security
 
+   cluster_security_group_id =
+        module.security_groups.eks_cluster_security_group_id
+
+
+    node_security_group_id =
+        module.security_groups.eks_node_security_group_id
 
 }
