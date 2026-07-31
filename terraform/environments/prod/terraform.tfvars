@@ -23,7 +23,6 @@ public_subnets=[
 
 ]
 
-
 private_subnets=[
 
  "10.20.10.0/24",
