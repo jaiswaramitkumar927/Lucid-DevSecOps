@@ -33,7 +33,7 @@ pushgateway:
   enabled: false
 
 kubeStateMetrics:
-  enabled: false
+  enabled: true
 
 prometheus-node-exporter:
   enabled: false
