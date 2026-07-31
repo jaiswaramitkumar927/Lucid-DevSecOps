@@ -1,19 +1,222 @@
-name: GitHub Actions Demo
-run-name: ${{ github.actor }} is testing out GitHub Actions 🚀
-on: [push]
+name: Build and Push Docker Image
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'app/**'
+      - 'hello-world/**'
+      - 'monitoring/**'
+      - '.github/workflows/ci-cd.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'app/**'
+      - 'hello-world/**'
+      - 'monitoring/**'
+      - '.github/workflows/ci-cd.yml'
+  workflow_dispatch:
+    inputs:
+      component:
+        description: 'Component to build or deploy'
+        required: true
+        default: 'all'
+        type: choice
+        options:
+          - all
+          - app
+          - prometheus
+          - grafana
+      deploy:
+        description: 'Sync Argo CD applications after build/publish'
+        required: false
+        default: true
+        type: boolean
+
+env:
+  REGISTRY: docker.io/amitkumarjai
+  IMAGE_NAME: hello-world
+
 jobs:
-  Explore-GitHub-Actions:
+  test-app:
     runs-on: ubuntu-latest
     steps:
-      - run: echo "🎉 The job was automatically triggered by a ${{ github.event_name }} event."
-      - run: echo "🐧 This job is now running on a ${{ runner.os }} server hosted by GitHub!"
-      - run: echo "🔎 The name of your branch is ${{ github.ref }} and your repository is ${{ github.repository }}."
-      - name: Check out repository code
-        uses: actions/checkout@v6
-      - run: echo "💡 The ${{ github.repository }} repository has been cloned to the runner."
-      - run: echo "🖥️ The workflow is now ready to test your code on the runner."
-      - name: List files in the repository
-        run: |
-          ls ${{ github.workspace }}
-      - run: echo "🍏 This job's status is ${{ job.status }}."
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install app dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r app/requirements.txt
+
+      - name: Validate Python syntax
+        run: |
+          python -m compileall app
+
+  build-and-push-app:
+    if: github.event_name != 'pull_request' && (github.event_name == 'push' || inputs.component == 'all' || inputs.component == 'app')
+    needs: test-app
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push container image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./app
+          file: ./app/Dockerfile
+          push: true
+          tags: |
+            docker.io/${{ secrets.DOCKER_USERNAME }}/hello-world:${{ github.sha }}
+            docker.io/${{ secrets.DOCKER_USERNAME }}/hello-world:latest
+
+      - name: Update Helm image values
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re
+
+          path = Path("hello-world/values.yaml")
+          text = path.read_text()
+          text = re.sub(
+              r'(^\s*repository:\s*).*$',
+              r'\1"docker.io/${{ secrets.DOCKER_USERNAME }}/hello-world"',
+              text,
+              count=1,
+              flags=re.M,
+          )
+          text = re.sub(
+              r'(^\s*tag:\s*).*$',
+              r'\1"${{ github.sha }}"',
+              text,
+              count=1,
+              flags=re.M,
+          )
+          path.write_text(text)
+          PY
+
+      - name: Commit updated image values
+        run: |
+          git config user.name "Amitkumar Jaiswar"
+          git config user.email "jaiswaramitkumar@email.com"
+          git add hello-world/values.yaml
+          if git diff --cached --quiet; then
+            echo "No image tag changes to commit."
+            exit 0
+          fi
+          git commit -m "chore: update hello-world image tag"
+          git push
+
+      - name: Helm Lint
+        run: |
+          helm lint hello-world
+          helm lint monitoring/prometheus
+          helm lint monitoring/grafana
+
+      - name: Render Helm Charts
+        run: |
+          helm template hello-world ./hello-world >/tmp/app.yaml
+          helm template prometheus ./monitoring/prometheus >/tmp/prom.yaml
+          helm template grafana ./monitoring/grafana >/tmp/graf.yaml
+
+  deploy-app-argocd:
+    if: github.event_name != 'pull_request' && (github.event_name == 'push' || inputs.component == 'all' || inputs.component == 'app') && (github.event_name == 'push' || inputs.deploy != 'false')
+    needs: build-and-push-app
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Argo CD CLI
+        run: |
+          curl -sSL -o /usr/local/bin/argocd https://github.com/argoproj/argo-cd/releases/download/v2.11.0/argocd-linux-amd64
+          chmod +x /usr/local/bin/argocd
+          argocd version --client
+
+      - name: Sync hello-world Argo CD app
+        env:
+          ARGOCD_SERVER: ${{ secrets.ARGOCD_SERVER }}
+          ARGOCD_USERNAME: ${{ secrets.ARGOCD_USERNAME }}
+          ARGOCD_PASSWORD: ${{ secrets.ARGOCD_PASSWORD }}
+        run: |
+          if [ -z "$ARGOCD_SERVER" ] || [ -z "$ARGOCD_USERNAME" ] || [ -z "$ARGOCD_PASSWORD" ]; then
+            echo "Skipping Argo CD sync because the required secrets are not configured."
+            exit 0
+          fi
+          argocd login "$ARGOCD_SERVER" --grpc-web --username "$ARGOCD_USERNAME" --password "$ARGOCD_PASSWORD"
+          argocd app sync hello-world --prune
+          argocd app wait hello-world --health --timeout 600
+
+  deploy-prometheus-argocd:
+    if: github.event_name != 'pull_request' && (github.event_name == 'push' || inputs.component == 'all' || inputs.component == 'prometheus') && (github.event_name == 'push' || inputs.deploy != 'false')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Argo CD CLI
+        run: |
+          curl -sSL -o /usr/local/bin/argocd https://github.com/argoproj/argo-cd/releases/download/v2.11.0/argocd-linux-amd64
+          chmod +x /usr/local/bin/argocd
+          argocd version --client
+
+      - name: Sync prometheus Argo CD app
+        env:
+          ARGOCD_SERVER: ${{ secrets.ARGOCD_SERVER }}
+          ARGOCD_USERNAME: ${{ secrets.ARGOCD_USERNAME }}
+          ARGOCD_PASSWORD: ${{ secrets.ARGOCD_PASSWORD }}
+        run: |
+          if [ -z "$ARGOCD_SERVER" ] || [ -z "$ARGOCD_USERNAME" ] || [ -z "$ARGOCD_PASSWORD" ]; then
+            echo "Skipping Argo CD sync because the required secrets are not configured."
+            exit 0
+          fi
+          argocd login "$ARGOCD_SERVER" --grpc-web --username "$ARGOCD_USERNAME" --password "$ARGOCD_PASSWORD"
+          argocd app sync prometheus --prune
+          argocd app wait prometheus --health --timeout 600
+
+  deploy-grafana-argocd:
+    if: github.event_name != 'pull_request' && (github.event_name == 'push' || inputs.component == 'all' || inputs.component == 'grafana') && (github.event_name == 'push' || inputs.deploy != 'false')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Argo CD CLI
+        run: |
+          curl -sSL -o /usr/local/bin/argocd https://github.com/argoproj/argo-cd/releases/download/v2.11.0/argocd-linux-amd64
+          chmod +x /usr/local/bin/argocd
+          argocd version --client
+
+      - name: Sync grafana Argo CD app
+        env:
+          ARGOCD_SERVER: ${{ secrets.ARGOCD_SERVER }}
+          ARGOCD_USERNAME: ${{ secrets.ARGOCD_USERNAME }}
+          ARGOCD_PASSWORD: ${{ secrets.ARGOCD_PASSWORD }}
+        run: |
+          if [ -z "$ARGOCD_SERVER" ] || [ -z "$ARGOCD_USERNAME" ] || [ -z "$ARGOCD_PASSWORD" ]; then
+            echo "Skipping Argo CD sync because the required secrets are not configured."
+            exit 0
+          fi
+          argocd login "$ARGOCD_SERVER" --grpc-web --username "$ARGOCD_USERNAME" --password "$ARGOCD_PASSWORD"
+          argocd app sync grafana --prune
+          argocd app wait grafana --health --timeout 600
