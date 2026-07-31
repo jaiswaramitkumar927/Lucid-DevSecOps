@@ -30,7 +30,6 @@ name="terraform-deployment-role"
         ]
 
     })
-
 }
 
 resource "aws_iam_role_policy_attachment" "admin" {
