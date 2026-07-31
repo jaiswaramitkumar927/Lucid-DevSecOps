@@ -1,0 +1,39 @@
+server:
+  enabled: true
+
+  service:
+    type: NodePort
+    port: 80
+    nodePort: 30090
+
+  persistentVolume:
+    enabled: false
+
+  retention: 2d
+
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 300m
+      memory: 512Mi
+
+  extraScrapeConfigs: |
+    - job_name: "hello-world"
+      metrics_path: /metrics
+      static_configs:
+        - targets:
+            - hello-world.default.svc.cluster.local:8080
+
+alertmanager:
+  enabled: false
+
+pushgateway:
+  enabled: false
+
+kubeStateMetrics:
+  enabled: false
+
+prometheus-node-exporter:
+  enabled: false

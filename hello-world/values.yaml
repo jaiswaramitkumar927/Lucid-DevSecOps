@@ -13,7 +13,7 @@ deployment:
 # Image
 # -----------------------------------------------------------------------------
 image:
-  repository: hello-world
+  repository: amitkumarjai/hello-world
   tag: "v1"
   pullPolicy: IfNotPresent
 
@@ -22,10 +22,20 @@ imagePullSecrets: []
 # -----------------------------------------------------------------------------
 # Service
 # -----------------------------------------------------------------------------
+#service:
+#  enabled: true
+#  type: ClusterIP
+#  port: 8080
 service:
   enabled: true
-  type: ClusterIP
+  type: NodePort
   port: 8080
+  targetPort: 8080
+  nodePort: 30080
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/path: "/metrics"
+    prometheus.io/port: "8080"
 
 tests:
   enabled: false
