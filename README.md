@@ -54,38 +54,69 @@ Configured backend resources:
 - DynamoDB table: `terraform-lock`
 - Region: `us-east-1`
 
-### Manual backend setup
+### Terraform bootstrap steps
 
-Create the backend resources once before the first [`terraform init`](terraform/environments/dev/backend.tf:1):
+Instead of creating the backend resources manually, use the bootstrap stack in [`terraform-bootstrap/`](terraform-bootstrap). This stack provisions:
+
+- A KMS key through [`module "kms"`](terraform-bootstrap/main.tf:1)
+- An S3 state bucket through [`module "state_bucket"`](terraform-bootstrap/main.tf:10)
+- A DynamoDB lock table through [`module "dynamodb"`](terraform-bootstrap/main.tf:21)
+- A Terraform deployment IAM role through [`module "terraform_role"`](terraform-bootstrap/main.tf:30)
+
+Bootstrap defaults are defined in [`terraform-bootstrap/terraform.tfvars`](terraform-bootstrap/terraform.tfvars:1):
+
+- State bucket: `lucidity-prod-terraform-state`
+- Lock table: `terraform-lock`
+- Region: `us-east-1`
+- KMS alias: `terraform-state-key`
+- IAM role: `terraform-deployment-role`
+
+### 1. Review the bootstrap configuration
+
+Check the provider and variables in [`terraform-bootstrap/providers.tf`](terraform-bootstrap/providers.tf:1), [`terraform-bootstrap/variables.tf`](terraform-bootstrap/variables.tf:1), and [`terraform-bootstrap/terraform.tfvars`](terraform-bootstrap/terraform.tfvars:1).
+
+### 2. Initialize the bootstrap stack
 
 ```bash
-aws s3api create-bucket \
-  --bucket lucidity-prod-terraform-state \
-  --region us-east-1
-
-aws s3api put-bucket-versioning \
-  --bucket lucidity-prod-terraform-state \
-  --versioning-configuration Status=Enabled
-
-aws dynamodb create-table \
-  --table-name terraform-lock \
-  --attribute-definitions AttributeName=LockID,AttributeType=S \
-  --key-schema AttributeName=LockID,KeyType=HASH \
-  --billing-mode PAY_PER_REQUEST \
-  --region us-east-1
+cd terraform-bootstrap
+terraform init
+terraform fmt -recursive
+terraform validate
 ```
 
-Optional hardening:
+### 3. Review the execution plan
 
 ```bash
-aws s3api put-bucket-encryption \
-  --bucket lucidity-prod-terraform-state \
-  --server-side-encryption-configuration '{"Rules":[{"ApplyServerSideEncryptionByDefault":{"SSEAlgorithm":"AES256"}}]}'
-
-aws s3api put-public-access-block \
-  --bucket lucidity-prod-terraform-state \
-  --public-access-block-configuration BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true
+terraform plan -var-file=terraform.tfvars
 ```
+
+### 4. Apply the bootstrap stack
+
+```bash
+terraform apply -var-file=terraform.tfvars
+```
+
+### 5. Confirm the backend resources were created
+
+The bootstrap modules create the S3 bucket, KMS encryption, public access block, DynamoDB lock table, and IAM role in:
+
+- [`terraform-bootstrap/modules/s3-state-bucket/main.tf`](terraform-bootstrap/modules/s3-state-bucket/main.tf:1)
+- [`terraform-bootstrap/modules/kms-key/main.tf`](terraform-bootstrap/modules/kms-key/main.tf:1)
+- [`terraform-bootstrap/modules/dynamodb-lock/main.tf`](terraform-bootstrap/modules/dynamodb-lock/main.tf:1)
+- [`terraform-bootstrap/modules/iam-role/main.tf`](terraform-bootstrap/modules/iam-role/main.tf:1)
+
+You can verify the created resources with:
+
+```bash
+aws s3api head-bucket --bucket lucidity-prod-terraform-state
+aws dynamodb describe-table --table-name terraform-lock --region us-east-1
+aws kms list-aliases --region us-east-1
+aws iam get-role --role-name terraform-deployment-role
+```
+
+### 6. Use the provisioned backend for environment deployments
+
+After the bootstrap stack succeeds, run [`terraform init`](terraform/environments/dev/backend.tf:1) in [`terraform/environments/dev/`](terraform/environments/dev) or [`terraform/environments/prod/`](terraform/environments/prod).
 
 ## Deploying with Terraform
 
