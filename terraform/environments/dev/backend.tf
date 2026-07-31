@@ -1,29 +1,17 @@
 terraform {
 
+    backend "s3" {
 
-backend "s3" {
+    bucket="lucidity-prod-terraform-state"
 
+    key="eks/dev/terraform.tfstate"
 
-bucket =
-"company-terraform-state"
+    region="us-east-1"
 
+    dynamodb_table="terraform-lock"
 
-key =
-"eks/dev/terraform.tfstate"
+    encrypt=true
 
-
-region =
-"us-east-1"
-
-
-dynamodb_table =
-"terraform-lock"
-
-
-encrypt=true
-
-
-}
-
+    }
 
 }
