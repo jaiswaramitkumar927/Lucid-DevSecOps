@@ -31,43 +31,81 @@ private_subnets=[
 ]
 
 
-cluster_name="dev-eks"
+cluster_name = "dev-eks"
 
 
 cluster_version="1.31"
 
 
 
-node_groups={
+node_groups = {
 
 
-general={
+    general = {
 
-desired_size=2
+    desired_size=2
 
-min_size=1
+    min_size=1
 
-max_size=5
-
-
-instance_types=[
-
-"t3.medium"
-
-]
+    max_size=5
 
 
-capacity_type="ON_DEMAND"
+        instance_types=[
 
+        "t3.medium"
+
+        ]
+
+
+    capacity_type="ON_DEMAND"
+
+
+    }
 
 }
 
-}
 
 
-
-tags={
+tags = {
 
 Environment="dev"
+
+}
+
+
+roles = {
+
+  devops = {
+    description = "DevOps Administrator"
+
+    policy_arns = [
+      "arn:aws:iam::aws:policy/AmazonEKSClusterPolicy",
+      "arn:aws:iam::aws:policy/AdministratorAccess"
+    ]
+  }
+
+  developers = {
+    description = "Developers"
+
+    policy_arns = [
+      "arn:aws:iam::aws:policy/AmazonEKSClusterPolicy"
+    ]
+  }
+
+  readonly = {
+    description = "Read Only"
+
+    policy_arns = [
+      "arn:aws:iam::aws:policy/ReadOnlyAccess"
+    ]
+  }
+
+  jenkins = {
+    description = "Jenkins"
+
+    policy_arns = [
+      "arn:aws:iam::aws:policy/AmazonEKSClusterPolicy"
+    ]
+  }
 
 }

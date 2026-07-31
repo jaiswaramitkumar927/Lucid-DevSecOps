@@ -100,6 +100,34 @@ module "security_groups" {
 
 }
 
+module "iam" {
+
+  source = "../../modules/iam"
+
+  roles = var.roles
+}
+
+module "eks_access" {
+
+  source = "../../modules/eks-access"
+
+  cluster_name = module.eks.cluster_name
+
+  access_entries = {
+
+    for key, value in var.eks_access_entries :
+
+    key => {
+
+      principal_arn = module.iam.role_arns[value.role_name]
+
+      policy_arn = value.policy_arn
+
+    }
+
+  }
+
+}
 
 module "eks" {
 
