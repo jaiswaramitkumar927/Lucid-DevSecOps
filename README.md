@@ -890,3 +890,7 @@ ArgoCD is deployed within the same Kubernetes cluster and manages application de
 ### Helm Charts
 
 Helm charts are used to deploy the application and monitoring stack (Prometheus and Grafana) with configurable values, Kubernetes resource limits, health probes, RBAC, and security contexts to ensure consistent, secure, and repeatable deployments across environments.
+
+### Terrform Multi AZ:
+
+For an EKS Terraform deployment with Multi-AZ subnets, the architecture typically uses multiple Availability Zones with separate public and private subnets for high availability.
