@@ -1,4 +1,4 @@
-vpc_name="dev-vpc"
+vpc_name="prod-vpc"
 
 
 vpc_cidr="10.20.0.0/16"
@@ -69,5 +69,42 @@ capacity_type="ON_DEMAND"
 tags={
 
 Environment="prod"
+
+}
+
+roles = {
+
+  devops = {
+    description = "DevOps Administrator"
+
+    policy_arns = [
+      "arn:aws:iam::aws:policy/AmazonEKSClusterPolicy",
+      "arn:aws:iam::aws:policy/AdministratorAccess"
+    ]
+  }
+
+  developers = {
+    description = "Developers"
+
+    policy_arns = [
+      "arn:aws:iam::aws:policy/AmazonEKSClusterPolicy"
+    ]
+  }
+
+  readonly = {
+    description = "Read Only"
+
+    policy_arns = [
+      "arn:aws:iam::aws:policy/ReadOnlyAccess"
+    ]
+  }
+
+  jenkins = {
+    description = "Jenkins"
+
+    policy_arns = [
+      "arn:aws:iam::aws:policy/AmazonEKSClusterPolicy"
+    ]
+  }
 
 }

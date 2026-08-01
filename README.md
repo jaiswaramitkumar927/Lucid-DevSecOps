@@ -1,8 +1,10 @@
-# Lucidity Assignment Workspace
+# 🚀 Lucidity Assignment Workspace
+
+> ☁️ Terraform + 🐳 Docker + ☸️ EKS + 🔄 Argo CD + 📊 Monitoring
 
 This repository contains Terraform code for provisioning AWS networking and Amazon EKS infrastructure, along with application, Helm, and monitoring assets.
 
-## Repository structure
+## 📁 Repository structure
 
 - [`terraform/`](terraform) - Terraform modules and environment stacks.
 - [`terraform/environments/dev/`](terraform/environments/dev) - Development environment with VPC, IAM, EKS, security groups, route tables, and EKS access entries.
@@ -11,7 +13,7 @@ This repository contains Terraform code for provisioning AWS networking and Amaz
 - [`app/`](app) and [`hello-world/`](hello-world) - Application source directories.
 - [`monitoring/`](monitoring) - Monitoring manifests and charts.
 
-## Terraform layout
+## 🧱 Terraform layout
 
 The development stack in [`terraform/environments/dev/main.tf`](terraform/environments/dev/main.tf) provisions:
 
@@ -25,7 +27,7 @@ The development stack in [`terraform/environments/dev/main.tf`](terraform/enviro
 
 The production stack in [`terraform/environments/prod/main.tf`](terraform/environments/prod/main.tf:1) currently provisions VPC and EKS only.
 
-## Prerequisites
+## ✅ Prerequisites
 
 Install and configure the following:
 
@@ -41,7 +43,7 @@ aws configure
 aws sts get-caller-identity
 ```
 
-## Terraform remote state
+## 🗂️ Terraform remote state
 
 Both environments use an S3 backend with DynamoDB locking:
 
@@ -118,7 +120,7 @@ aws iam get-role --role-name terraform-deployment-role
 
 After the bootstrap stack succeeds, run [`terraform init`](terraform/environments/dev/backend.tf:1) in [`terraform/environments/dev/`](terraform/environments/dev) or [`terraform/environments/prod/`](terraform/environments/prod).
 
-## Deploying with Terraform
+## ⚙️ Deploying with Terraform
 
 ### Development
 
@@ -142,7 +144,7 @@ terraform plan -var-file=terraform.tfvars
 terraform apply -var-file=terraform.tfvars
 ```
 
-## IAM roles created by Terraform
+## 🔐 IAM roles created by Terraform
 
 The IAM module creates roles from the `roles` map defined in [`terraform/environments/dev/terraform.tfvars`](terraform/environments/dev/terraform.tfvars:76) using [`aws_iam_role.this`](terraform/modules/iam/main.tf:1) and attaches AWS managed policies using [`aws_iam_role_policy_attachment.this`](terraform/modules/iam/main.tf:11).
 
@@ -155,7 +157,7 @@ Current development roles:
 
 The role ARNs are exposed through [`output "role_arns"`](terraform/modules/iam/outputs.tf:1) and are consumed by [`module "eks_access"`](terraform/environments/dev/main.tf:110).
 
-## EKS cluster access using IAM and kubeconfig
+## ☸️ EKS cluster access using IAM and kubeconfig
 
 EKS access entries are created by [`aws_eks_access_entry.this`](terraform/modules/eks-access/main.tf:1) and policy associations are created by [`aws_eks_access_policy_association.this`](terraform/modules/eks-access/main.tf:12). These entries authorize IAM principals to access the cluster.
 
@@ -213,7 +215,7 @@ aws eks list-access-entries \
   --region us-east-1
 ```
 
-## Jenkins agent access from EC2 IAM role
+## 🤖 Jenkins agent access from EC2 IAM role
 
 The `jenkins` IAM role is declared in [`terraform/environments/dev/terraform.tfvars`](terraform/environments/dev/terraform.tfvars:103). To use this for deployments from a Jenkins agent running on EC2:
 
@@ -244,7 +246,13 @@ helm list -A
 
 If the EC2 instance profile is already the same IAM role authorized in EKS, the `--role-arn` argument can be omitted.
 
-## Manual deployment steps for the Hello World stack
+## 🧪 Deploy Application on Test Environment
+
+Before deploying the application manually on Kubernetes, complete the Minikube setup by following the prerequisite guide:
+
+📖 [Setting Up Minikube Kubernetes Cluster](./setup-minikube-k8s.md)
+
+## 🌍 Manual deployment steps for the Hello World stack
 
 The application chart is defined in [`hello-world/Chart.yaml`](hello-world/Chart.yaml:1) and its default deployment settings are in [`hello-world/values.yaml`](hello-world/values.yaml:1).
 
@@ -307,7 +315,7 @@ curl http://52.118.214.122/
 curl http://52.118.214.122/metrics
 ```
 
-## Manual deployment steps for the monitoring stack
+## 📊 Manual deployment steps for the monitoring stack
 
 The monitoring stack uses the vendored Prometheus chart in [`monitoring/prometheus/Chart.yaml`](monitoring/prometheus/Chart.yaml:1) and the Grafana chart in [`monitoring/grafana/Chart.yaml`](monitoring/grafana/Chart.yaml:1), with overrides in [`monitoring/prom_values.yaml`](monitoring/prom_values.yaml:1) and [`monitoring/graf_values.yaml`](monitoring/graf_values.yaml:1).
 
@@ -448,11 +456,11 @@ Kubernetes Cluster
 
 This flow maps directly to [`.github/workflows/hello-world-ci.yml`](.github/workflows/hello-world-ci.yml:1), the Argo CD Application manifests in [`gitOps-CD/CD-Resource/`](gitOps-CD/CD-Resource), and the live deployment on EKS.
 
-## CD with Argo CD
+## 🔄 CD with Argo CD
 
 The CD setup is stored in [`gitOps-CD/`](gitOps-CD) and applies Helm charts from this repository into the EKS cluster using Argo CD Applications.
 
-## CI with GitHub Actions
+## 🛠️ CI with GitHub Actions
 
 The CI workflow is implemented in [`hello-world app pipeline`](.github/workflows/hello-world-ci.yml:1) and gives end users a clear path to understand how source code changes move from GitHub to Docker Hub and then into GitOps-driven deployment.
 
@@ -539,7 +547,71 @@ This image should show rollout and event verification for the deployment managed
    - Grafana at [`http://52.118.214.122/grafana/`](http://52.118.214.122/grafana/)
    - Argo CD at [`http://52.118.214.122/argocd`](http://52.118.214.122/argocd)
 
-## Notes
+## 🛡️ Security posture
 
-- Production currently does not define the IAM and EKS access modules present in development; see [`terraform/environments/prod/main.tf`](terraform/environments/prod/main.tf:35).
-- The production tfvars file currently uses `vpc_name="dev-vpc"` in [`terraform/environments/prod/terraform.tfvars`](terraform/environments/prod/terraform.tfvars:1), which should be reviewed before applying production infrastructure.
+### Infrastructure security controls
+
+The Terraform bootstrap stack provisions protected remote state components with the following controls:
+
+- KMS encryption for Terraform state in [`aws_kms_key.terraform`](terraform-bootstrap/modules/kms-key/main.tf:1)
+- KMS key rotation enabled in [`aws_kms_key.terraform`](terraform-bootstrap/modules/kms-key/main.tf:1)
+- S3 bucket versioning enabled in [`aws_s3_bucket_versioning.versioning`](terraform-bootstrap/modules/s3-state-bucket/main.tf:9)
+- S3 server-side encryption using KMS in [`aws_s3_bucket_server_side_encryption_configuration.encrypt`](terraform-bootstrap/modules/s3-state-bucket/main.tf:26)
+- S3 public access blocked in [`aws_s3_bucket_public_access_block.block`](terraform-bootstrap/modules/s3-state-bucket/main.tf:49)
+- DynamoDB state locking in [`aws_dynamodb_table.lock`](terraform-bootstrap/modules/dynamodb-lock/main.tf:1)
+
+### IAM and EKS access security
+
+Cluster access is controlled through dedicated IAM roles and EKS access entries:
+
+- IAM roles are created centrally in [`aws_iam_role.this`](terraform/modules/iam/main.tf:1)
+- IAM policies are attached explicitly in [`aws_iam_role_policy_attachment.this`](terraform/modules/iam/main.tf:11)
+- EKS access is granted through [`aws_eks_access_entry.this`](terraform/modules/eks-access/main.tf:1)
+- EKS policy associations are managed through [`aws_eks_access_policy_association.this`](terraform/modules/eks-access/main.tf:12)
+- Jenkins deployment access is separated through the `jenkins` role in [`terraform/environments/dev/terraform.tfvars`](terraform/environments/dev/terraform.tfvars:103)
+
+### Kubernetes service exposure security
+
+The deployment uses internal services and ingress-based exposure instead of exposing every workload directly:
+
+- Hello World uses `ClusterIP` service type in [`hello-world/values.yaml`](hello-world/values.yaml:25)
+- Grafana uses `ClusterIP` service type in [`monitoring/graf_values.yaml`](monitoring/graf_values.yaml:11)
+- Hello World is exposed through NGINX ingress in [`k8s-ingress.yml`](k8s-ingress.yml:1)
+- Grafana is exposed through NGINX ingress in [`grafana-ingress.yml`](grafana-ingress.yml:1)
+- Argo CD is exposed through NGINX ingress in [`gitOps-CD/argo-cd-ingress.yaml`](gitOps-CD/argo-cd-ingress.yaml:1)
+
+### Secrets and credential handling
+
+The repository avoids hardcoding some runtime credentials directly in Helm values and references Kubernetes secrets where configured:
+
+- Grafana admin credentials come from an existing Kubernetes secret in [`monitoring/graf_values.yaml`](monitoring/graf_values.yaml:17)
+- Docker registry credentials are consumed from GitHub Actions secrets in [`.github/workflows/hello-world-ci.yml`](.github/workflows/hello-world-ci.yml:97)
+- The CI workflow uses `DOCKER_USERNAME` and `DOCKER_TOKEN` secrets in [`.github/workflows/hello-world-ci.yml`](.github/workflows/hello-world-ci.yml:100)
+
+### CI pipeline security controls
+
+The GitHub Actions pipeline contains multiple security checks before deployment metadata is updated:
+
+- Filesystem vulnerability scanning with Trivy in [`filesystem-scan`](.github/workflows/hello-world-ci.yml:62)
+- Container image scanning with Trivy in [`image-scan`](.github/workflows/hello-world-ci.yml:124)
+- Code validation through compile, test, lint, and format checks in [`test`](.github/workflows/hello-world-ci.yml:24)
+- Helm chart linting and manifest rendering in [`helm`](.github/workflows/hello-world-ci.yml:141)
+- Image promotion through immutable commit SHA tags in [`docker`](.github/workflows/hello-world-ci.yml:103)
+
+### Monitoring and observability security posture
+
+The monitoring stack is configured to reduce unnecessary exposed surface area while keeping observability available:
+
+- Prometheus scrape target is internal cluster DNS in [`monitoring/prom_values.yaml`](monitoring/prom_values.yaml:22)
+- Alertmanager and Pushgateway are disabled in [`monitoring/prom_values.yaml`](monitoring/prom_values.yaml:29)
+- Prometheus node exporter is disabled in [`monitoring/prom_values.yaml`](monitoring/prom_values.yaml:38)
+- Grafana is served behind a subpath in [`monitoring/graf_values.yaml`](monitoring/graf_values.yaml:1)
+
+### GitOps deployment safety controls
+
+Argo CD is configured to continuously reconcile from Git and keep drift under control:
+
+- All Argo CD apps point to the Git repository as source of truth in [`gitOps-CD/CD-Resource/hello-world-CD.yaml`](gitOps-CD/CD-Resource/hello-world-CD.yaml:11), [`gitOps-CD/CD-Resource/prometheus.yaml`](gitOps-CD/CD-Resource/prometheus.yaml:11), and [`gitOps-CD/CD-Resource/grafana-cd.yaml`](gitOps-CD/CD-Resource/grafana-cd.yaml:14)
+- Automated sync with self-heal and prune is enabled in [`gitOps-CD/CD-Resource/hello-world-CD.yaml`](gitOps-CD/CD-Resource/hello-world-CD.yaml:23), [`gitOps-CD/CD-Resource/prometheus.yaml`](gitOps-CD/CD-Resource/prometheus.yaml:23), and [`gitOps-CD/CD-Resource/grafana-cd.yaml`](gitOps-CD/CD-Resource/grafana-cd.yaml:26)
+- Namespace creation is controlled through `CreateNamespace=true` in the Argo CD Application manifests
+
