@@ -15,6 +15,74 @@ This repository contains Terraform code for provisioning AWS networking and Amaz
 
 ## 🧱 Terraform layout
 
+### Overall Architecture
+
+```
+                                  Git Repository
+                                        │
+            ┌───────────────────────────┴───────────────────────────┐
+            │                                                       │
+            ▼                                                       ▼
+  terraform-bootstrap                                   terraform (EKS Platform)
+  (Run Once)                                            (Run Every Deployment)
+            │                                                       │
+            │                                                       │
+            ▼                                                       ▼
+     Creates Backend                                      Uses Remote Backend
+            │                                                       │
+            ├───────────────────────────────────────────────────────┐
+            │                                                       │
+            ▼                                                       ▼
+    ┌────────────────┐                                   ┌────────────────────┐
+    │ S3 State Bucket│◄──────────── terraform.tfstate ───│ Terraform CLI       │
+    └────────────────┘                                   └────────────────────┘
+            │
+            │
+    ┌────────────────┐
+    │ DynamoDB Lock  │
+    └────────────────┘
+            │
+            │
+    ┌────────────────┐
+    │ AWS KMS Key    │
+    └────────────────┘
+            │
+            │
+    ┌────────────────┐
+    │ IAM Role       │
+    └────────────────┘
+```
+
+### AWS Infrastructure Provisioning
+
+```
+                         Developer / Jenkins
+                                 │
+                                 │
+                         terraform apply
+                                 │
+                                 ▼
+                      environments/dev or prod
+                                 │
+          ┌──────────────────────┴──────────────────────┐
+          │                                             │
+          ▼                                             ▼
+     VPC Module                                   EKS Module
+          │                                             │
+          │                                             │
+ ┌────────────────────┐                     ┌────────────────────┐
+ │ VPC                │                     │ EKS Cluster        │
+ │ Internet Gateway   │                     │ Control Plane      │
+ │ Public Subnets     │                     │ Managed Node Groups│
+ │ Private Subnets    │                     │ IAM Roles          │
+ │ NAT Gateway        │                     │ EKS Add-ons        │
+ │ Route Tables       │                     │ Security Groups    │
+ └────────────────────┘                     └────────────────────┘
+                    │
+                    ▼
+           AWS Kubernetes Platform
+```
+
 The development stack in [`terraform/environments/dev/main.tf`](terraform/environments/dev/main.tf) provisions:
 
 - VPC and subnets through [`module "vpc"`](terraform/environments/dev/main.tf:1)
@@ -288,31 +356,6 @@ Important defaults from [`hello-world/values.yaml`](hello-world/values.yaml:25):
 - Image tag: `e7f8af15462b66626d103364473ac14142b229d4`
 - Replicas: `2`
 - Application access should be routed through the NGINX ingress endpoint `http://52.118.214.122/`
-
-### 5. Create the Docker registry secret
-
-Before deploying the chart, create the Docker Hub pull secret used by [`imagePullSecrets`](hello-world/values.yaml:20):
-
-```bash
-kubectl create secret docker-registry dockerhub-secret \
-  --docker-server=https://index.docker.io/v1/ \
-  --docker-username=amitkumarjai \
-  --docker-password='<dockerhub-token>' \
-  --docker-email=jaiswarbrothers7083@gmail.com \
-  -n default
-```
-
-If the secret already exists, recreate it:
-
-```bash
-kubectl delete secret dockerhub-secret -n default
-kubectl create secret docker-registry dockerhub-secret \
-  --docker-server=https://index.docker.io/v1/ \
-  --docker-username=amitkumarjai \
-  --docker-password='<dockerhub-token>' \
-  --docker-email=jaiswarbrothers7083@gmail.com \
-  -n default
-```
 
 ### 6. Deploy the Hello World chart
 
