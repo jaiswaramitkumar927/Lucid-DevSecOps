@@ -17,8 +17,8 @@ image:
   tag: "24dc9fe029c4a4570bf388f6833516a9f4b93885"
   pullPolicy: IfNotPresent
 
-imagePullSecrets: []
-
+imagePullSecrets:
+  - name: dockerhub-secret
 # -----------------------------------------------------------------------------
 # Service
 # -----------------------------------------------------------------------------

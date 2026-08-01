@@ -11,6 +11,9 @@ server:
 
   retention: 2d
 
+imagePullSecrets:
+  - name: dockerhub-secret
+
   resources:
     requests:
       cpu: 100m
