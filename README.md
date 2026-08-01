@@ -767,3 +767,126 @@ Argo CD is configured to continuously reconcile from Git and keep drift under co
 - Automated sync with self-heal and prune is enabled in [`gitOps-CD/CD-Resource/hello-world-CD.yaml`](gitOps-CD/CD-Resource/hello-world-CD.yaml:23), [`gitOps-CD/CD-Resource/prometheus.yaml`](gitOps-CD/CD-Resource/prometheus.yaml:23), and [`gitOps-CD/CD-Resource/grafana-cd.yaml`](gitOps-CD/CD-Resource/grafana-cd.yaml:26)
 - Namespace creation is controlled through `CreateNamespace=true` in the Argo CD Application manifests
 
+## 📈 Recommended improvements
+
+### Terraform CI/CD using EC2 IAM access
+
+To strengthen infrastructure delivery, the next improvement is to run Terraform from a dedicated EC2-based runner that uses an attached IAM instance profile instead of long-lived user credentials. This improves auditability and reduces credential sprawl.
+
+Recommended improvements:
+
+- Use separate EC2 runner IAM roles for `dev` and `prod`
+- Restrict Terraform apply to approved branches and operators
+- Add `terraform fmt`, `terraform validate`, and `terraform plan` to CI before apply
+- Save Terraform plan output as a pipeline artifact for review
+- Use manual approval before applying infrastructure changes to production
+- Limit the EC2 runner role permissions to only the resources Terraform manages
+
+### Kubernetes security improvements
+
+Recommended Kubernetes hardening improvements for this repository:
+
+- Enforce Pod Security Standards on `default`, `monitoring`, and `argocd` namespaces
+- Set non-root containers, `readOnlyRootFilesystem`, and dropped Linux capabilities in [`hello-world/values.yaml`](hello-world/values.yaml:95)
+- Add NetworkPolicies for application, monitoring, and Argo CD communication paths
+- Apply namespace-level resource quotas and limit ranges
+- Restrict public admin surfaces such as Grafana and Argo CD with stronger access controls
+- Add admission control or policy enforcement with tools such as Kyverno or OPA Gatekeeper
+- Regularly scan workloads and cluster configuration with tools such as Trivy and kube-bench
+
+### Kubeconfig management improvements
+
+Kubeconfig should be handled as a temporary access artifact, not as a shared static file.
+
+Recommended improvements:
+
+- Generate kubeconfig on demand with [`aws eks update-kubeconfig`](README.md)
+- Use separate kubeconfig contexts and AWS profiles for each environment
+- RBAC Access management based on the service Account Access.
+- Avoid committing or copying kubeconfig files between systems
+- Restrict kubeconfig file permissions on operator and runner hosts
+- Use IAM role assumption for short-lived cluster access
+- Remove outdated EKS access entries when users or automation no longer need access
+
+### Kubernetes secrets and KMS improvements
+
+Secret management can be improved by reducing manual secret handling and using managed encryption.
+
+Recommended improvements:
+
+- Enable EKS secret encryption with AWS KMS for Kubernetes secrets at rest
+- Use AWS Secrets Manager or HashiCorp Vault for secret storage instead of manual secret creation where possible
+- Use External Secrets Operator to sync secrets into Kubernetes
+- Rotate Docker registry, Grafana, and application credentials on a regular schedule
+- Restrict secret read access through Kubernetes RBAC
+- Avoid exposing secrets in Helm values, CI logs, terminal history, or documentation
+
+### Open-source alternatives to DynamoDB for Terraform locking
+
+This repository currently uses DynamoDB for Terraform state locking through [`terraform-bootstrap/modules/dynamodb-lock/main.tf`](terraform-bootstrap/modules/dynamodb-lock/main.tf:1). If you want open-source alternatives, the main options are:
+
+- Redis & ETCD – High-performance key-value store suitable for distributed locking and state coordination.
+
+Practical recommendation:
+
+- For AWS-native deployments, keep DynamoDB because it is simpler and well-supported
+- For open-source self-hosted setups, Redis is the most established direct alternative
+
+### VPC, internet, public/private subnet, and edge security improvements
+
+The repository already uses public and private subnets in [`terraform/environments/dev/main.tf`](terraform/environments/dev/main.tf:1) and [`terraform/environments/prod/main.tf`](terraform/environments/prod/main.tf:1). The next security improvements should focus on tighter edge and network controls.
+
+Recommended improvements:
+
+- Keep worker nodes and internal services only in private subnets
+- Limit public subnet usage to ingress controllers, NAT, and approved public endpoints
+- Enable VPC Flow Logs for audit and traffic analysis
+- Tighten Security Group and Network ACL rules by traffic direction and workload role
+- Disable unnecessary public IP assignment on compute resources
+- Segment CI/CD runners, admin access, and workloads with separate security boundaries where needed
+- Restrict egress from private workloads when required by policy
+
+### WAF and ingress protection improvements
+
+For publicly reachable endpoints, add stronger web edge protections.
+
+Recommended improvements:
+
+- Place AWS WAF in front of public ingress or load balancers
+- Enable managed rule groups, IP filtering, and rate limiting
+- Enforce HTTPS with ACM certificates and ingress redirects
+- Protect Grafana and Argo CD behind authentication and allow lists
+- Add ingress controller protections such as body size limits and secure headers
+
+### Observability and security operations improvements
+
+Security operations maturity can be improved by expanding monitoring, logging, and alerting.
+
+Recommended improvements:
+
+- Enable EKS control plane audit logs in CloudWatch
+- Centralize application, ingress, and Argo CD logs
+- Alert on failed image pulls, crash loops, and suspicious ingress traffic
+- Monitor IAM role usage through CloudTrail and CloudWatch
+- Add image signing and provenance verification for released images
+
+
+## Key Points
+
+### Docker Image Build for Hello-World
+
+The application uses a multi-stage Docker build to separate the build environment from the runtime environment. Dependencies are installed in a builder stage and only the required artifacts are copied into a minimal Distroless runtime image. This reduces the final image size, improves security, and removes unnecessary build tools.
+
+### Docker Layer Caching for Hello-World
+
+The Dockerfile is optimized for build caching by copying requirements.txt before the application source code. Since dependency installation is cached, rebuilding the image after source code changes only rebuilds the application layers, significantly reducing build time.
+
+### ArgoCD
+
+ArgoCD continuously monitors the Git repository and automatically synchronizes Kubernetes resources, enabling secure GitOps-based deployments, automated drift detection, and easy rollback to previous application versions.
+
+ArgoCD is deployed within the same Kubernetes cluster and manages application deployments using the GitOps approach. Each application is defined as an ArgoCD Application resource, allowing automated or manual synchronization from the Git repository to the cluster.
+
+### Helm Charts
+
+Helm charts are used to deploy the application and monitoring stack (Prometheus and Grafana) with configurable values, Kubernetes resource limits, health probes, RBAC, and security contexts to ensure consistent, secure, and repeatable deployments across environments.
