@@ -14,7 +14,7 @@ deployment:
 # -----------------------------------------------------------------------------
 image:
   repository: amitkumarjai/hello-world
-  tag: "58adbb59fb72250fa1309ea0ffa9a8c26abe75d2"
+  tag: "78d47a5ff18a00023491c1d2515e8ae0dd1c7eb4"
   pullPolicy: IfNotPresent
 
 imagePullSecrets:
