@@ -1,0 +1,24 @@
+server:
+  service:
+    type: ClusterIP
+
+  ingress:
+    enabled: false
+
+configs:
+  params:
+    server.insecure: true
+    server.basehref: /argocd
+    server.rootpath: /argocd
+
+controller:
+  replicas: 1
+
+repoServer:
+  replicas: 1
+
+applicationSet:
+  enabled: true
+
+redis:
+  enabled: true
