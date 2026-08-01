@@ -289,7 +289,32 @@ Important defaults from [`hello-world/values.yaml`](hello-world/values.yaml:25):
 - Replicas: `2`
 - Application access should be routed through the NGINX ingress endpoint `http://52.118.214.122/`
 
-### 5. Deploy the Hello World chart
+### 5. Create the Docker registry secret
+
+Before deploying the chart, create the Docker Hub pull secret used by [`imagePullSecrets`](hello-world/values.yaml:20):
+
+```bash
+kubectl create secret docker-registry dockerhub-secret \
+  --docker-server=https://index.docker.io/v1/ \
+  --docker-username=amitkumarjai \
+  --docker-password='<dockerhub-token>' \
+  --docker-email=jaiswarbrothers7083@gmail.com \
+  -n default
+```
+
+If the secret already exists, recreate it:
+
+```bash
+kubectl delete secret dockerhub-secret -n default
+kubectl create secret docker-registry dockerhub-secret \
+  --docker-server=https://index.docker.io/v1/ \
+  --docker-username=amitkumarjai \
+  --docker-password='<dockerhub-token>' \
+  --docker-email=jaiswarbrothers7083@gmail.com \
+  -n default
+```
+
+### 6. Deploy the Hello World chart
 
 ```bash
 helm upgrade --install hello-world ./hello-world \
@@ -297,7 +322,7 @@ helm upgrade --install hello-world ./hello-world \
   -f ./hello-world/values.yaml
 ```
 
-### 6. Verify the application deployment
+### 7. Verify the application deployment
 
 ```bash
 kubectl get deploy,po,svc -n default
@@ -305,7 +330,7 @@ kubectl rollout status deployment/hello-world -n default
 kubectl describe svc hello-world -n default
 ```
 
-### 7. Test application access through NGINX Ingress
+### 8. Test application access through NGINX Ingress
 
 Use the shared ingress endpoint `http://52.118.214.122/` to access the Hello World application.
 
