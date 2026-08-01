@@ -315,6 +315,54 @@ curl http://52.118.214.122/
 curl http://52.118.214.122/metrics
 ```
 
+## 🐳 Docker registry secret for private image pulls
+
+The Hello World chart is configured to use the Docker registry secret in [`imagePullSecrets`](hello-world/values.yaml:20).
+
+### 1. Create the Docker Hub pull secret
+
+Create the Kubernetes registry secret in the namespace where the application is deployed:
+
+```bash
+kubectl create secret docker-registry dockerhub-secret \
+  --docker-server=https://index.docker.io/v1/ \
+  --docker-username=<dockerhub-username> \
+  --docker-password='<dockerhub-token>' \
+  --docker-email=<dockerhub-email> \
+  -n default
+```
+
+### 2. Confirm the secret was created
+
+```bash
+kubectl get secret dockerhub-secret -n default
+kubectl describe secret dockerhub-secret -n default
+```
+
+### 3. Helm values configuration
+
+The Helm chart now references the Docker registry secret in [`hello-world/values.yaml`](hello-world/values.yaml:20):
+
+```yaml
+imagePullSecrets:
+  - name: dockerhub-secret
+```
+
+### 4. Deploy or upgrade the chart
+
+```bash
+helm upgrade --install hello-world ./hello-world \
+  --namespace default \
+  -f ./hello-world/values.yaml
+```
+
+### 5. Verify image pulls are working
+
+```bash
+kubectl describe pod -n default -l app.kubernetes.io/name=hello-world
+kubectl get events -n default --sort-by=.metadata.creationTimestamp
+```
+
 ## 📊 Manual deployment steps for the monitoring stack
 
 The monitoring stack uses the vendored Prometheus chart in [`monitoring/prometheus/Chart.yaml`](monitoring/prometheus/Chart.yaml:1) and the Grafana chart in [`monitoring/grafana/Chart.yaml`](monitoring/grafana/Chart.yaml:1), with overrides in [`monitoring/prom_values.yaml`](monitoring/prom_values.yaml:1) and [`monitoring/graf_values.yaml`](monitoring/graf_values.yaml:1).
@@ -585,6 +633,7 @@ The deployment uses internal services and ingress-based exposure instead of expo
 The repository avoids hardcoding some runtime credentials directly in Helm values and references Kubernetes secrets where configured:
 
 - Grafana admin credentials come from an existing Kubernetes secret in [`monitoring/graf_values.yaml`](monitoring/graf_values.yaml:17)
+- The Hello World chart uses the Kubernetes pull secret configured in [`hello-world/values.yaml`](hello-world/values.yaml:20)
 - Docker registry credentials are consumed from GitHub Actions secrets in [`.github/workflows/hello-world-ci.yml`](.github/workflows/hello-world-ci.yml:97)
 - The CI workflow uses `DOCKER_USERNAME` and `DOCKER_TOKEN` secrets in [`.github/workflows/hello-world-ci.yml`](.github/workflows/hello-world-ci.yml:100)
 

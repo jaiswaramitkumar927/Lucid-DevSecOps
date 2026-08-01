@@ -14,11 +14,12 @@ deployment:
 # -----------------------------------------------------------------------------
 image:
   repository: amitkumarjai/hello-world
-  tag: "53bc48ead7d1cbe151cf6e37ad207639a5ccc1dc"
+  tag: "9b976601cf495c3f6c30addb10bd5d51798d8a3a"
   pullPolicy: IfNotPresent
 
 imagePullSecrets:
   - name: dockerhub-secret
+
 # -----------------------------------------------------------------------------
 # Service
 # -----------------------------------------------------------------------------
