@@ -273,13 +273,13 @@ kubectl get namespace default || kubectl create namespace default
 
 ### 4. Review the Hello World chart values
 
-Important defaults from [`hello-world/values.yaml`](hello-world/values.yaml:29):
+Important defaults from [`hello-world/values.yaml`](hello-world/values.yaml:25):
 
-- Service type: `NodePort`
+- Service type: `ClusterIP`
 - Service port: `8080`
-- NodePort: `30080`
-- Image: `amitkumarjai/hello-world:v1`
+- Image tag: `e7f8af15462b66626d103364473ac14142b229d4`
 - Replicas: `2`
+- Application access should be routed through the NGINX ingress endpoint `http://52.118.214.122/`
 
 ### 5. Deploy the Hello World chart
 
@@ -297,22 +297,14 @@ kubectl rollout status deployment/hello-world -n default
 kubectl describe svc hello-world -n default
 ```
 
-### 7. Test application access
+### 7. Test application access through NGINX Ingress
 
-If worker nodes are reachable on the NodePort:
-
-```bash
-kubectl get svc hello-world -n default
-curl http://<worker-node-public-ip>:30080/
-curl http://<worker-node-public-ip>:30080/metrics
-```
-
-If direct NodePort access is not allowed, use port-forwarding:
+Use the shared ingress endpoint `http://52.118.214.122/` to access the Hello World application.
 
 ```bash
-kubectl port-forward svc/hello-world 8080:8080 -n default
-curl http://127.0.0.1:8080/
-curl http://127.0.0.1:8080/metrics
+kubectl get svc,ingress -n default
+curl http://52.118.214.122/
+curl http://52.118.214.122/metrics
 ```
 
 ## Manual deployment steps for the monitoring stack
@@ -329,7 +321,7 @@ kubectl get namespace monitoring || kubectl create namespace monitoring
 
 The Prometheus override file configures:
 
-- NodePort service on port `30090`
+- Cluster-internal service exposure
 - `2d` retention
 - Static scrape target: `hello-world.default.svc.cluster.local:8080`
 - `kube-state-metrics` enabled
@@ -368,11 +360,11 @@ curl http://127.0.0.1:9090/api/v1/targets
 
 The Grafana override file configures:
 
-- NodePort service on port `30300`
-- Admin username `admin`
-- Admin password `admin123`
+- `ClusterIP` service in [`monitoring/graf_values.yaml`](monitoring/graf_values.yaml:11)
+- Admin credentials from the existing secret in [`monitoring/graf_values.yaml`](monitoring/graf_values.yaml:17)
 - Prometheus datasource pointing to `http://prometheus-server.monitoring.svc.cluster.local`
 - Preloaded dashboards from [`monitoring/grafana/dashboards/`](monitoring/grafana/dashboards)
+- Subpath access behind NGINX ingress in [`monitoring/graf_values.yaml`](monitoring/graf_values.yaml:1)
 
 Deploy it with:
 
@@ -389,26 +381,15 @@ kubectl get pods,svc -n monitoring
 kubectl rollout status deployment/grafana -n monitoring
 ```
 
-### 5. Access Grafana
+### 5. Access Grafana through NGINX Ingress
 
-If NodePort access is available:
-
-```bash
-kubectl get svc grafana -n monitoring
-```
-
-Open `http://<worker-node-public-ip>:30300` and log in with:
-
-- Username: `admin`
-- Password: `admin123`
-
-If NodePort access is not available, use port-forwarding:
+Use the shared ingress endpoint `http://52.118.214.122/` and access Grafana on the `/grafana/` path.
 
 ```bash
-kubectl port-forward svc/grafana 3000:80 -n monitoring
+kubectl get svc,ingress -n monitoring
 ```
 
-Then open `http://127.0.0.1:3000`.
+Open `http://52.118.214.122/grafana/` and log in using the credentials stored in the existing Kubernetes secret referenced by [`monitoring/graf_values.yaml`](monitoring/graf_values.yaml:17).
 
 ### 6. Validate dashboards and metrics
 
@@ -430,6 +411,133 @@ kubectl get all -n monitoring
 kubectl logs deployment/prometheus-server -n monitoring
 kubectl logs deployment/grafana -n monitoring
 ```
+
+### CI/CD architecture diagram
+
+The following architecture describes the end-to-end GitOps flow implemented by this repository:
+
+```text
+Developer
+    │
+    │ git push
+    ▼
+GitHub Repository
+    │
+    ▼
+GitHub Actions (CI)
+    ├── Test
+    ├── Lint
+    ├── Trivy Scan
+    ├── Build Docker Image
+    ├── Push Docker Image
+    ├── Update Helm values.yaml
+    └── Commit values.yaml
+             │
+             ▼
+Git Repository (updated Helm chart)
+             │
+             ▼
+Argo CD (Auto Sync)
+             │
+             ▼
+Helm Upgrade
+             │
+             ▼
+Kubernetes Cluster
+```
+
+This flow maps directly to [`.github/workflows/hello-world-ci.yml`](.github/workflows/hello-world-ci.yml:1), the Argo CD Application manifests in [`gitOps-CD/CD-Resource/`](gitOps-CD/CD-Resource), and the live deployment on EKS.
+
+## CD with Argo CD
+
+The CD setup is stored in [`gitOps-CD/`](gitOps-CD) and applies Helm charts from this repository into the EKS cluster using Argo CD Applications.
+
+## CI with GitHub Actions
+
+The CI workflow is implemented in [`hello-world app pipeline`](.github/workflows/hello-world-ci.yml:1) and gives end users a clear path to understand how source code changes move from GitHub to Docker Hub and then into GitOps-driven deployment.
+
+### CI repository walkthrough
+
+The main CI assets are:
+
+- Application source in [`app/`](app)
+- Container build definition in [`app/Dockerfile`](app/Dockerfile)
+- Helm chart in [`hello-world/`](hello-world)
+- Monitoring charts in [`monitoring/prometheus/`](monitoring/prometheus) and [`monitoring/grafana/`](monitoring/grafana)
+- GitHub Actions workflow in [`.github/workflows/hello-world-ci.yml`](.github/workflows/hello-world-ci.yml:1)
+
+### CI workflow stages
+
+The pipeline runs these jobs from [`.github/workflows/hello-world-ci.yml`](.github/workflows/hello-world-ci.yml:18):
+
+1. [`test`](.github/workflows/hello-world-ci.yml:24) validates the Python app.
+2. [`filesystem-scan`](.github/workflows/hello-world-ci.yml:62) runs a Trivy filesystem scan.
+3. [`docker`](.github/workflows/hello-world-ci.yml:82) builds and pushes the Docker image.
+4. [`image-scan`](.github/workflows/hello-world-ci.yml:124) scans the pushed image.
+5. [`helm`](.github/workflows/hello-world-ci.yml:141) lints and renders the Helm charts.
+6. [`update-image-tag`](.github/workflows/hello-world-ci.yml:175) updates [`hello-world/values.yaml`](hello-world/values.yaml:17) with the new image tag on `main`.
+
+### CI images
+
+#### GitHub Actions workflow run
+
+![GitHub Actions CI Run](docs/images/github-actions-ci.png)
+
+This image should show the workflow graph for the jobs defined in [`.github/workflows/hello-world-ci.yml`](.github/workflows/hello-world-ci.yml:24).
+
+#### Docker Hub image tags
+
+![Docker Hub Image Tags](docs/images/dockerhub-tags.png)
+
+This image should show the pushed tags that correspond to the image publishing step in [`docker`](.github/workflows/hello-world-ci.yml:103).
+
+### CD repository walkthrough
+
+The main CD assets are:
+
+- Argo CD Helm values in [`gitOps-CD/values.yaml`](gitOps-CD/values.yaml:1)
+- Argo CD ingress in [`gitOps-CD/argo-cd-ingress.yaml`](gitOps-CD/argo-cd-ingress.yaml:1)
+- Hello World Argo CD app in [`gitOps-CD/CD-Resource/hello-world-CD.yaml`](gitOps-CD/CD-Resource/hello-world-CD.yaml:1)
+- Prometheus Argo CD app in [`gitOps-CD/CD-Resource/prometheus.yaml`](gitOps-CD/CD-Resource/prometheus.yaml:1)
+- Grafana Argo CD app in [`gitOps-CD/CD-Resource/grafana-cd.yaml`](gitOps-CD/CD-Resource/grafana-cd.yaml:1)
+- Hello World ingress in [`k8s-ingress.yml`](k8s-ingress.yml:1)
+- Grafana ingress in [`grafana-ingress.yml`](grafana-ingress.yml:1)
+
+### How CD works in this repository
+
+1. GitHub Actions updates [`hello-world/values.yaml`](hello-world/values.yaml:17) with the latest image SHA.
+2. Argo CD watches the `main` branch of this repository using the [`repoURL`](gitOps-CD/CD-Resource/hello-world-CD.yaml:11) configured in each Application.
+3. Argo CD syncs the Helm chart paths for Hello World, Prometheus, and Grafana.
+4. NGINX ingress exposes the deployed services at:
+   - Hello World: [`http://52.118.214.122/`](http://52.118.214.122/)
+   - Grafana: [`http://52.118.214.122/grafana/`](http://52.118.214.122/grafana/)
+   - Argo CD: [`http://52.118.214.122/argocd`](http://52.118.214.122/argocd)
+
+### CD images
+
+#### Argo CD applications view
+
+![Argo CD Applications](docs/images/argocd-applications.png)
+
+This image should show the synced Argo CD Applications created from [`gitOps-CD/CD-Resource/hello-world-CD.yaml`](gitOps-CD/CD-Resource/hello-world-CD.yaml:1), [`gitOps-CD/CD-Resource/prometheus.yaml`](gitOps-CD/CD-Resource/prometheus.yaml:1), and [`gitOps-CD/CD-Resource/grafana-cd.yaml`](gitOps-CD/CD-Resource/grafana-cd.yaml:1).
+
+#### Hello World rollout verification
+
+![Hello World Rollout](docs/images/hello-world-rollout.png)
+
+This image should show rollout and event verification for the deployment managed by Argo CD.
+
+### End-to-end CI/CD walkthrough for users
+
+1. Start in [`app/`](app) to review the application source.
+2. Check [`.github/workflows/hello-world-ci.yml`](.github/workflows/hello-world-ci.yml:1) to understand how CI validates, scans, builds, and publishes the image.
+3. Review [`hello-world/values.yaml`](hello-world/values.yaml:1) to see how the image tag and Kubernetes settings are defined.
+4. Review the Argo CD Applications under [`gitOps-CD/CD-Resource/`](gitOps-CD/CD-Resource) to see how Git becomes the deployment source of truth.
+5. Review ingress definitions in [`k8s-ingress.yml`](k8s-ingress.yml:1), [`grafana-ingress.yml`](grafana-ingress.yml:1), and [`gitOps-CD/argo-cd-ingress.yaml`](gitOps-CD/argo-cd-ingress.yaml:1) to understand external access.
+6. Open the live endpoints to validate the deployed system:
+   - Hello World at [`http://52.118.214.122/`](http://52.118.214.122/)
+   - Grafana at [`http://52.118.214.122/grafana/`](http://52.118.214.122/grafana/)
+   - Argo CD at [`http://52.118.214.122/argocd`](http://52.118.214.122/argocd)
 
 ## Notes
 
