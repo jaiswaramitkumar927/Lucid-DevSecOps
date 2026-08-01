@@ -321,14 +321,28 @@ The Hello World chart is configured to use the Docker registry secret in [`image
 
 ### 1. Create the Docker Hub pull secret
 
-Create the Kubernetes registry secret in the namespace where the application is deployed:
+Create the Kubernetes registry secret in the namespace where the application is deployed.
+
+Example command used for this environment:
 
 ```bash
 kubectl create secret docker-registry dockerhub-secret \
   --docker-server=https://index.docker.io/v1/ \
-  --docker-username=<dockerhub-username> \
+  --docker-username=amitkumarjai \
   --docker-password='<dockerhub-token>' \
-  --docker-email=<dockerhub-email> \
+  --docker-email=jaiswarbrothers7083@gmail.com \
+  -n default
+```
+
+If the secret already exists and you want to refresh it, recreate it with:
+
+```bash
+kubectl delete secret dockerhub-secret -n default
+kubectl create secret docker-registry dockerhub-secret \
+  --docker-server=https://index.docker.io/v1/ \
+  --docker-username=amitkumarjai \
+  --docker-password='<dockerhub-token>' \
+  --docker-email=jaiswarbrothers7083@gmail.com \
   -n default
 ```
 
@@ -337,6 +351,13 @@ kubectl create secret docker-registry dockerhub-secret \
 ```bash
 kubectl get secret dockerhub-secret -n default
 kubectl describe secret dockerhub-secret -n default
+kubectl get secret dockerhub-secret -n default -o jsonpath='{.type}'
+```
+
+Expected secret type:
+
+```text
+kubernetes.io/dockerconfigjson
 ```
 
 ### 3. Helm values configuration
@@ -356,11 +377,25 @@ helm upgrade --install hello-world ./hello-world \
   -f ./hello-world/values.yaml
 ```
 
+To verify that Helm renders the pull secret reference before applying, run:
+
+```bash
+helm template hello-world ./hello-world -f ./hello-world/values.yaml | grep -A3 imagePullSecrets
+```
+
 ### 5. Verify image pulls are working
 
 ```bash
+kubectl describe deployment hello-world -n default
 kubectl describe pod -n default -l app.kubernetes.io/name=hello-world
 kubectl get events -n default --sort-by=.metadata.creationTimestamp
+```
+
+If pods were created before the secret existed, restart the deployment after creating the secret:
+
+```bash
+kubectl rollout restart deployment/hello-world -n default
+kubectl rollout status deployment/hello-world -n default
 ```
 
 ## 📊 Manual deployment steps for the monitoring stack
