@@ -1,4 +1,4 @@
-# 🚀 Lucid DevOps Workspace
+# 🚀 Lucid DevOps Workspace by Amitkumar Jaiswar (DevOps Engineer)
 
 > ☁️ Terraform + 🐳 Docker + ☸️ EKS + 🔄 Argo CD + 📊 Monitoring
 
