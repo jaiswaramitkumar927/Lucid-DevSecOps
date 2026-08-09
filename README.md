@@ -1,4 +1,4 @@
-# 🚀 Lucidity Assignment Workspace
+# 🚀 Lucid DevOps Workspace
 
 > ☁️ Terraform + 🐳 Docker + ☸️ EKS + 🔄 Argo CD + 📊 Monitoring
 
